@@ -143,7 +143,14 @@ public:
     void CandidateLayer(const Matrix_t &input, Matrix_t &dF);
 
     /* Computes and return the next state with given input */
-    void Forward(Tensor_t &input, bool isTraining = true); 
+    void Forward(Tensor_t &input, bool isTraining = true);
+    
+    /*! Backpropagates the error. Must only be called directly at the corresponding
+     *  call to Forward(...). */
+    void Backward(Tensor_t &gradients_backward,
+                  const Tensor_t &activations_backward,
+                  std::vector<Matrix_t> &inp1,
+                  std::vector<Matrix_t> &inp2);
 
     /* Updates weights and biases, according to learning rate  */
     void Update(const Scalar_t learningRate);
