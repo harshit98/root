@@ -20,11 +20,11 @@
  * For the list of contributors see $ROOTSYS/README/CREDITS.                      *
  **********************************************************************************/
 
-//////////////////////////////////////////////////////////////////////
-// LSTM Network is a special kind of Recurrent Neural Network (RNN) 
-// which capable of learning long-term dependencies. LSTM can remember
-// given information for long period of time.
-//////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+// LSTM Network is a special kind of recurrent neural network which is
+// capable of learning long-term dependencies. LSTM can remember given
+// information for long period of time.
+///////////////////////////////////////////////////////////////////////
 
 #ifndef LSTMLAYER_H
 #define LSTMLAYER_H
@@ -70,15 +70,34 @@ private:
 
     DNN::EActivationFunction fF; // Activation function of hidden state
 
-    Matrix_t fState; // Hidden state
-    Matrix_t &fWeightsInput; // Input weights, fWeights[0]
-    Matrix_t &fWeightsState; // Previous state weights, fWeights[1]
-    Matrix_t &fBiases; // Biases
+    Matrix_t fInputGateState; // Hidden state of Input Gate
+    Matrix_t fCandidateGateState; // Hidden state of Candidate Gate
+    Matrix_t fForgetGateState; // Hidden state of Forget Gate
+    Matrix_t fOutputGateState; // Hidden state of Output Gate
 
-   std::vector<Matrix_t> fDerivatives; ///< First fDerivatives of the activations
-   Matrix_t &fWeightInputGradients; ///< Gradients w.r.t. the input weights
-   Matrix_t &fWeightStateGradients; ///< Gradients w.r.t. the state weights
-   Matrix_t &fBiasGradients;        ///< Gradients w.r.t. the bias values
+    Matrix_t &fInputWeightsOfInputGate; // Input gate weights, fInputWeightsOfInputGate[0]
+    Matrix_t &fWeightsInputState; // Previous state weights, fWeightsInputState[1]
+    Matrix_t &fInputGateBiases; // Input gate biases
+
+    Matrix_t &fInputWeightsOfCandidate; // Input candidate weights, fInputWeightsOfCandidate[0]
+    Matrix_t &fWeightsCandidateState; // Previous state weights, fWeightsCandidateState[1]
+    Matrix_t &fCandidateBiases; // Candidate biases
+
+    Matrix_t &fInputWeightsOfForgetGate; // Forget gate weights, fInputWeightsOfForgetGate[0]
+    Matrix_t &fWeightsForgetState; // Previous state weights, fWeightsForgetState[1]
+    Matrix_t &fForgetGateBiases; // Forget gate biases 
+
+    Matrix_t &fInputWeightsOfOutputGate; // Output gate weights, fInputWeightsOfOutputGate[0]
+    Matrix_t &fWeightsOutputState; // Output gate weights, fWeightsOutputState[1]
+    Matrix_t &fOutputGateBiases; // Output gate biases
+
+    // derivatives input gate, forget gate and output gate
+    // TODO
+    // .....
+    std::vector<Matrix_t> fDerivatives; ///< First fDerivatives of the activations
+    Matrix_t &fWeightInputGradients; ///< Gradients w.r.t. the input weights
+    Matrix_t &fWeightStateGradients; ///< Gradients w.r.t. the state weights
+    Matrix_t &fBiasGradients;        ///< Gradients w.r.t. the bias values
 
 public:
 
@@ -109,11 +128,16 @@ public:
     /* Computes output values */
     void OutputGateLayer(const Matrix_t &input, Matrix_t &dF);
 
-    /* Updates Memory cell value */
-    void UpdateMemoryCell(const Matrix_t &input, Matrix_t &dF);
+    /* Updates Memory cell value 
+     * inputA = fCandidateState, inputB = fInputGateState */
+    void UpdateMemoryCell(const Matrix_t &inputA, const Matrix_t &inputB);
 
-    /* Computes candidate values (NN with Tanh)*/
-    void CandidateLayer(const Matrix_t &input, Matrix_t &dF);
+    /* Updates next hidden state */
+    void UpdateHiddenState(const Matrix_t &input, Matrix_t &dF);
+
+    /* Computes candidate values (NN with Tanh)
+     * inputB = fInputGateState */
+    void CandidateLayer(const Matrix_t &input, Matrix_t &dF, const Matrix_t &inputB);
 
     /* Computes and return the next state with given input */
     void Forward(Tensor_t &input, bool isTraining = true); 
@@ -160,7 +184,7 @@ public:
 //
 // BasicLSTMLayer Implementation
 //______________________________________________________________________________
-template <typename Architecture_t>
+// template <typename Architecture_t>
 // auto inline TBasicLSTMLayer<Architecture_t>::TBasicLSTMLayer
 
 //______________________________________________________________________________
@@ -169,34 +193,36 @@ auto inline TBasicLSTMLayer<Architecture_t>::InputGateLayer(const Matrix_t &inpu
 -> void
 {
     // I is input gate's activation vector
-    // I = act(W_input . input + W_state . prev_state + bias)
+    // I = act(W_input . input + W_state . state + bias)
     // act = Sigmoid
     const DNN::EActivationFunction fAF = this.GetActivationFunction();
-    Matrix_t tmpState(fState.GetNRows(), fState.GetNCols());
-    Architecture_t::MultiplyTranspose(tmpState, fState, fWeightsState);
-    Architecture_t::MultiplyTranspose(fState, input, fWeightsInput);
-    Architecture_t::ScaleAdd( fState, tmpState);
-    Architecture_t::AddRowWise(fState, fBiases);
-    DNN::evaluateDerivative<Architecture_t>(dF, fAF, fState);
-    DNN::evaluate<Architecture_t>(fState, fAF);
+    Matrix_t tmpState(fInputGateState.GetNRows(), fInputGateState.GetNCols());
+    Architecture_t::MultiplyTranspose(tmpState, fInputGateState, fWeightsInputState);
+    Architecture_t::MultiplyTranspose(fInputGateState, input, fInputWeightsOfInputGate);
+    Architecture_t::ScaleAdd(fInputGateState, tmpState);
+    Architecture_t::AddRowWise(fInputGateState, fInputGateBiases);
+    DNN::evaluateDerivative<Architecture_t>(dF, fAF, fInputGateState);
+    DNN::evaluate<Architecture_t>(fInputGateState, fAF);
+    CandidateLayer(input, dF, fInputGateState);
 }
 
 //______________________________________________________________________________
 template <typename Architecture_t>
-auto inline TBasicLSTM<Architecture_t>::CandidateLayer(const Matrix_t &input, Matrix_t &dF)
+auto inline TBasicLSTMLayer<Architecture_t>::CandidateLayer(const Matrix_t &input, Matrix_t &dF, const Matrix_t &inputB)
 -> void
 {
     // C is candidate values
     // C = act(W_input . input + W_state . prev_state + bias)
     // act = Tanh
     const DNN::EActivationFunction fAF = this.GetActivationFunction();
-    Matrix_t tmpState(fState.GetNRows(), fState.GetNCols());
-    Architecture_t::MultiplyTranspose(tmpState, fState, fWeightsState);
-    Architecture_t::MultiplyTranspose(fState, input, fWeightsInput);
-    Architecture_t::ScaleAdd( fState, tmpState);
-    Architecture_t::AddRowWise(fState, fBiases);
-    DNN::evaluateDerivative<Architecture_t>(dF, fAF, fState);
-    DNN::evaluate<Architecture_t>(fState, fAF);
+    Matrix_t tmpState(fCandidateGateState.GetNRows(), fCandidateGateState.GetNCols());
+    Architecture_t::MultiplyTranspose(tmpState, fCandidateGateState, fWeightsCandidateState);
+    Architecture_t::MultiplyTranspose(fCandidateGateState, input, fInputWeightsOfCandidate);
+    Architecture_t::ScaleAdd(fCandidateGateState, tmpState);
+    Architecture_t::AddRowWise(fCandidateGateState, fCandidateBiases);
+    DNN::evaluateDerivative<Architecture_t>(dF, fAF, fCandidateGateState);
+    DNN::evaluate<Architecture_t>(fCandidateGateState, fAF);
+    UpdateMemoryCell(fCandidateGateState, inputB);
 
     // pass candidate values in UpdateMemoryCell() to update memory
     // TODO
@@ -205,30 +231,43 @@ auto inline TBasicLSTM<Architecture_t>::CandidateLayer(const Matrix_t &input, Ma
 
 //______________________________________________________________________________
 template <typename Architecture_t>
-auto inline TBasicLSTMLayer<Architecture_t>::UpdateMemoryCell(const Matrix_t &input, Matrix_t &dF)
+auto inline TBasicLSTMLayer<Architecture_t>::UpdateMemoryCell(const Matrix_t &inputA, const Matrix_t &inputB)
 -> void
 {
-    // Memory cell value M has been calculated using candidate state value,
-    // TODO
-    // Write the algorithm to calculate memory cell value.
+    /*! Memory cell value C_t will be calculated using candidate state values,
+     *  input gate values and forget gate values. C_t will be passed to next timestep. 
+     *  inputA = fCandidateState, inputB = fInputGateState */
+    for (size_t t=0; t < fTimeSteps; ++t) {
+        Architecture_t::MultiplyTranspose(C[t], inputA[t], inputB[t]);
+    }
 }
 
+//______________________________________________________________________________
+template <typename Architecture_t>
+auto inline TBasicLSTMLayer<Architecture_t>::UpdateHiddenState(const Matrix_t &input, Matrix_t &dF)
+-> void
+{
+    /*! Next hidden state values h_t will be calculated using memory state values C_t
+     *  and output gate values. h_t will be passed to next timestep. */
+    // TODO
+    // .....
+}
 //______________________________________________________________________________
 template <typename Architecture_t>
 auto inline TBasicLSTMLayer<Architecture_t>::ForgetGateLayer(const Matrix_t &input, Matrix_t &dF)
 -> void
 {
     // F is forget gate's activation vector
-    // F = act(W_input . input + W_state . prev_state + bias)
+    // F = act(W_input . input + W_state . state + bias)
     // act = Sigmoid
     const DNN::EActivationFunction fAF = this.GetActivationFunction();
-    Matrix_t tmpState(fState.GetNRows(), fState.GetNCols());
-    Architecture_t::MultiplyTranspose(tmpState, fState, fWeightsState);
-    Architecture_t::MultiplyTranspose(fState, input, fWeightsInput);
-    Architecture_t::ScaleAdd( fState, tmpState);
-    Architecture_t::AddRowWise(fState, fBiases);
-    DNN::evaluateDerivative<Architecture_t>(dF, fAF, fState);
-    DNN::evaluate<Architecture_t>(fState, fAF);
+    Matrix_t tmpState(fForgetGateState.GetNRows(), fForgetGateState.GetNCols());
+    Architecture_t::MultiplyTranspose(tmpState, fForgetGateState, fWeightsForgetState);
+    Architecture_t::MultiplyTranspose(fForgetGateState, input, fInputWeightsOfForgetGate);
+    Architecture_t::ScaleAdd(fForgetGateState, tmpState);
+    Architecture_t::AddRowWise(fForgetGateState, fForgetGateBiases);
+    DNN::evaluateDerivative<Architecture_t>(dF, fAF, fForgetGateState);
+    DNN::evaluate<Architecture_t>(fForgetGateState, fAF);
     // pass the values in UpdateMemoryCell() to update memory
     // TODO
     // ....
@@ -239,10 +278,17 @@ template <typename Architecture_t>
 auto inline TBasicLSTMLayer<Architecture_t>::OutputGateLayer(const Matrix_t &input, Matrix_t &dF)
 -> void
 {
-    // TODO
-    // To calculate the value of output gate, we should be having memory cell value
-    // This function will calculate output value and next hidden state.
-    // .....
+    // O is output gate's activation vector
+    // O = act(W_input . input + W_state . state + bias)
+    // act = Sigmoid
+    const DNN::EActivationFunction fAF = this.GetActivationFunction();
+    Matrix_t tmpState(fForgetGateState.GetNRows(), fForgetGateState.GetNCols());
+    Architecture_t::MultiplyTranspose(tmpState, fForgetGateState, fWeightsForgetState);
+    Architecture_t::MultiplyTranspose(fForgetGateState, input, fInputWeightsOfForgetGate);
+    Architecture_t::ScaleAdd(fForgetGateState, tmpState);
+    Architecture_t::AddRowWise(fForgetGateState, fForgetGateBiases);
+    DNN::evaluateDerivative<Architecture_t>(dF, fAF, fForgetGateState);
+    DNN::evaluate<Architecture_t>(fForgetGateState, fAF);
 }
 
 template <typename Architecture_t>
@@ -263,11 +309,19 @@ auto inline TBasicLSTMLayer<Architecture_t>::Forward(Tensor_t &input, bool /* is
    if (!this->fRememberState) InitState(DNN::EInitialization::kZero);
    for (size_t t = 0; t < fTimeSteps; ++t) {
       InputGateLayer(arrInput[t], fDerivatives[t]);
-      CandidateLayer(arrInput[t], fDerivatives[t]);
+      // CandidateLayer(arrInput[t], fDerivatives[t]);
       ForgetGateLayer(arrInput[t], fDerivatives[t]);
+      OutputGateLayer(arrInput[t], fDerivatives[t]);
       Architecture_t::Copy(arrOutput[t], fState);
    }
    Architecture_t::Rearrange(this->GetOutput(), arrOutput);  // B x T x D
+}
+
+//______________________________________________________________________________
+template <typename Architecture_t>
+auto TBasicRNNLayer<Architecture_t>::InitState(DNN::EInitialization /*m*/) -> void
+{
+   DNN::initialize<Architecture_t>(this->GetState(),  DNN::EInitialization::kZero);
 }
 
 //______________________________________________________________________________
