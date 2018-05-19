@@ -131,26 +131,24 @@ public:
     /* Computes output values */
     void OutputGateLayer(const Matrix_t &input, Matrix_t &dF);
 
-    /* Updates Memory cell value 
-     * inputA = fCandidateState, inputB = fInputGateState */
+    /* Updates Memory cell value  */
     void UpdateMemoryCell(const Matrix_t &input, Matrix_t &dF, Matrix_t &A);
 
     /* Updates next hidden state */
     void UpdateHiddenState(const Matrix_t &C_T, Matrix_t &A);
 
-    /* Computes candidate values (NN with Tanh)
-     * inputB = fInputGateState */
+    /* Computes candidate values (NN with Tanh) */
     void CandidateLayer(const Matrix_t &input, Matrix_t &dF);
 
     /* Computes and return the next state with given input */
     void Forward(Tensor_t &input, bool isTraining = true);
-    
-    /*! Backpropagates the error. Must only be called directly at the corresponding
-     *  call to Forward(...). */
-    void Backward(Tensor_t &gradients_backward,
-                  const Tensor_t &activations_backward,
-                  std::vector<Matrix_t> &inp1,
-                  std::vector<Matrix_t> &inp2);
+
+   /*! Backpropagates the error. Must only be called directly at the corresponding
+    *  call to Forward(...). */
+   void Backward(Tensor_t &gradients_backward,
+                 const Tensor_t &activations_backward,
+                 std::vector<Matrix_t> &inp1,
+                 std::vector<Matrix_t> &inp2);
 
     /* Updates weights and biases, according to learning rate  */
     void Update(const Scalar_t learningRate);
@@ -280,8 +278,7 @@ auto inline TBasicLSTMLayer<Architecture_t>::UpdateMemoryCell(const Matrix_t &in
 -> void
 {
     /*! Memory cell value C_t will be calculated using candidate state values,
-     *  input gate values and forget gate values. C_t will be passed to next timestep. 
-     *  inputA = fCandidateState, inputB = fInputGateState */
+     *  input gate values and forget gate values. C_t will be passed to next timestep. */
     Matrix_t C = CandidateGateLayer(input, dF);
     Matrix_t I = InputGateLayer(input, dF);
     Matrix_t F = ForgetGateLayer(input, dF);
