@@ -170,6 +170,18 @@ public:
    inline DNN::EActivationFunction GetActivationFunction()  const {return fF;}
    Matrix_t        & GetState()            {return fState;}
    const Matrix_t & GetState()       const  {return fState;}
+   Matrix_t        & GetMemoryState()            {return fMemoryState;}
+   const Matrix_t & GetMemoryState()       const  {return fMemoryState;}
+   Matrix_t        & GetHiddenState()            {return fHiddenState;}
+   const Matrix_t & GetHiddenState()       const  {return fHiddenState;}
+   Matrix_t        & GetInputGateState()            {return fInputGateState;}
+   const Matrix_t & GetInputGateState()       const  {return fInputGateState;}
+   Matrix_t        & GetCandidateGateState()            {return fCandidateGateState;}
+   const Matrix_t & GetCandidateGateState()       const  {return fCandidateGateState;}
+   Matrix_t        & GetForgetGateState()            {return fForgetGateState;}
+   const Matrix_t & GetForgetGateState()       const  {return fForgetGateState;}
+   Matrix_t        & GetOutputGateState()            {return fOutputGateState;}
+   const Matrix_t & GetOutputGateState()       const  {return fOutputGateState;}
    Matrix_t        & GetWeightsInput()        {return fWeightsInput;}
    const Matrix_t & GetWeightsInput()   const {return fWeightsInput;}
    Matrix_t        & GetWeightsState()        {return fWeightsState;}
@@ -192,49 +204,85 @@ public:
 //
 // BasicLSTMLayer Implementation
 //______________________________________________________________________________
-/* template<typename Architecture_t>
+template<typename Architecture_t>
 TBasicLSTMLayer<Architecture_t>::TBasicLSTMLayer(size_t batchSize, size_t stateSize, size_t inputSize,
                                               size_t timeSteps, bool rememberState,
                                               DNN::EActivationFunction f,
                                               bool training, DNN::EInitialization fA)
-    : VGeneralLayer<Architecture_t>(batchSize, 1, 1, inputSize, 1, 1, stateSize, 2, 
-                                    {stateSize, stateSize}, {inputSize, stateSize}, 1,
-                                    {stateSize}, {1}, batchSize, timeSteps, stateSize, fA)
-     fTimeSteps(timeSteps),
-     fStateSize(stateSize),
-     fRememberState(rememberState),
-     fF(f),
-     fState(batchSize, stateSize),
-     fWeightsInput(this->GetWeightsAt(0)),
-     fWeightsState(this->GetWeightsAt(1)),
-     fBiases(this->GetBiasesAt(0)),
-     fWeightInputGradients(this->GetWeightGradientsAt(0)),
-     fWeightStateGradients(this->GetWeightGradientsAt(1)),
-     fBiasGradients(this->GetBiasGradientsAt(0))
+   : VGeneralLayer<Architecture_t>(batchSize, 1, 1, inputSize, 1, 1, stateSize, 2, {stateSize, stateSize}, {inputSize, stateSize},
+   1, {stateSize}, {1}, batchSize, timeSteps, stateSize, fA),
+
+    fTimeSteps(timeSteps),
+    fRememberState(rememberState),
+    fStateSize(stateSize),
+    fF(f),
+
+    fMemoryState(batchSize, stateSize),
+    fHiddenState(batchSize, stateSize),
+    fInputGateState(batchSize, stateSize),
+    fCandidateGateState(batchSize, stateSize),
+    fForgetGateState(batchSize, stateSize),
+    fOutputGateState(batchSize, stateSize),
+
+    fInputWeightsOfInputGate(this->GetWeightsAt(0)),
+    fWeightsInputState(this->GetWeightsAt(1)),
+    fInputGateBiases(this->GetBiasesAt(0)),
+
+    fInputWeightsOfCandidate(this->GetWeightsAt(0)),
+    fWeightsCandidateState(this->GetWeightsAt(1)),
+    fCandidateBiases(this->GetBiasesAt(0)),
+
+    fInputWeightsOfForgetGate(this->GetWeightsAt(0)),
+    fWeightsForgetState(this->GetWeightsAt(1)),
+    fForgetGateBiases(this->GetBiasesAt(0)),
+
+    fInputWeightsOfOutputGate(this->GetWeightsAt(0)),
+    fWeightsOutputState(this->GetWeightsAt(1)),
+    fOutputGateBiases(this->GetBiasesAt(0)),
+
+    // derivatives - input gate, forget gate and output gate
+    // TODO
+    // .....
+    fWeightInputGradients(this->GetWeightGradientsAt(0)),
+    fWeightStateGradients(this->GetWeightGradientsAt(1)),
+    fBiasGradients(this->GetBiasGradientsAt(0))
 {
-  for (size_t i = 0; i < timeSteps; ++i) {
-     fDerivatives.emplace_back(batchSize, stateSize);
-  }
-   // Nothing
+    for (size_t i = 0; i < timeSteps; ++i) {
+        fDerivatives.emplace_back(batchSize, stateSize);
+    }
 }
 
 //______________________________________________________________________________
 template <typename Architecture_t>
 TBasicLSTMLayer<Architecture_t>::TBasicLSTMLayer(const TBasicLSTMLayer &layer)
-   : VGeneralLayer<Architecture_t>(layer), fTimeSteps(layer.fTimeSteps), fStateSize(layer.fStateSize),
-     fRememberState(layer.fRememberState), fF(layer.GetActivationFunction()),
-     fState(layer.GetBatchSize(), layer.GetStateSize()), fWeightsInput(this->GetWeightsAt(0)),
-     fWeightsState(this->GetWeightsAt(1)), fBiases(this->GetBiasesAt(0)),
-     fDerivatives(), fWeightInputGradients(this->GetWeightGradientsAt(0)),
-     fWeightStateGradients(this->GetWeightGradientsAt(1)), fBiasGradients(this->GetBiasGradientsAt(0))
+   : VGeneralLayer<Architecture_t>(layer), fTimeSteps(layer.fTimeSteps), fRememberState(layer.fRememberState)
+   fStateSize(layer.fStateSize), fF(layer.GetActivationFunction()), fMemorysState(layer.GetBatchSize(), layer.GetStateSize()),
+   fHiddenState(layer.GetBatchSize(), layer.GetStateSize()), fInputGateState(layer.GetBatchSize(), layer.GetStateSize()),
+   fCandidateGateState(layer.GetBatchSize(), layer.GetStateSize()), fForgetGateState(layer.GetBatchSize(), layer.GetStateSize()),
+   fOutputGateState(layer.GetBatchSize(), layer.GetBatchSize()), fInputWeightsOfInputGate(this->GetWeightsAt(0)),
+   fWeightsInputState(this->GetWeightsAt(1)), fInputGateBiases(this->GetBiasesAt(0)),
+   fInputWeightsOfCandidate(this->GetWeightsAt(0)), fWeightsCandidateState(this->GetWeightsAt(1)),
+   fCandidateBiases(this->GetBiasesAt(0)), fInputWeightsOfForgetGate(this->GetWeightsAt(0)),
+   fWeightsForgetState(this->GetWeightsAt(1)), fForgetGateBiases(this->GetBiasesAt(0)),
+   fInputWeightsOfOutputGate(this->GetWeightsAt(0)), fWeightsOutputState(this->GetWeightsAt(1)),
+   fOutputGateBiases(this->GetBiasesAt(0)), fWeightInputGradients(this->GetWeightGradientsAt(0)),
+   fWeightStateGradients(this->GetWeightGradientsAt(1)), fBiasGradients(this->GetBiasGradientsAt(0))
+   
+   // TODO
+   // derivatives - input gate, forget gate, and the output gate
 {
    for (size_t i = 0; i < fTimeSteps; ++i) {
      fDerivatives.emplace_back(layer.GetBatchSize(), layer.GetStateSize());
      Architecture_t::Copy(fDerivatives[i], layer.GetDerivativesAt(i));
    }
-   // Gradient matrices not copied
-   Architecture_t::Copy(fState, layer.GetState());
-} */
+    // Gradient matrices not copied
+   Architecture_t::Copy(fMemorysState, layer.GetMemoryState());
+   Architecture_t::Copy(fHiddenState, layer.GetHiddenState());
+   Architecture_t::Copy(fInputGateState, layer.GetInputGateState());
+   Architecture_t::Copy(fCandidateGateState, layer.GetCandidateGateState());
+   Architecture_t::Copy(fForgetGateState, layer.GetForgetGateState());
+   Architecture_t::Copy(fOutputGateState, layer.GetOutputGateState());
+}
 
 //______________________________________________________________________________
 template <typename Architecture_t>
@@ -379,6 +427,16 @@ auto inline TBasicLSTMLayer<Architecture_t>::Backward(Tensor_t &gradients_backwa
 -> void
 {
    //TODO
+}
+
+//______________________________________________________________________________
+template <typename Architecture_t>
+auto inline TBasicLSTMLayer<Architecture_t>::CellBackward(Matrix_t &state_gradients_backward,
+                                                          const Matrix_t &precStateActivations,
+                                                          const Matritx_t &input, Matrix_t input_gradients, Matrix_t dF)
+-> void
+{
+    // TODO
 }
 
 //______________________________________________________________________________
