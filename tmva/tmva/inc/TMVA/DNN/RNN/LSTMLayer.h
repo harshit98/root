@@ -351,7 +351,8 @@ auto inline TBasicLSTMLayer<Architecture_t>::UpdateMemoryCell(const Matrix_t &in
             Architecture_t::MultiplyTranspose(tmpState1, F[t], C_T[t-1]);
             Architecture_t::MultiplyTranspose(tmpState2, I[t], C[t]);
             // C_T[t-1] = Architecture_t::ScaleAdd(tmpState1, tmpState2);
-            Architecture_t::Copy(C_T[t-1], tmpState2);
+            Architecture_t::ScaleAdd(tmpState1, tmpState2);
+            Architecture_t::Copy(C_T[t-1], tmpState1);
         }
         C_T[i] += C_T[i-1];
     }
